@@ -1,0 +1,132 @@
+/*
+ * Presence Detection Algorithm Implementation
+ *
+ * NOTE: This is a SIMPLIFIED version for initial testing.
+ * Full algorithm requires:
+ * - Blackman-Harris windowing
+ * - Range FFT computation (use CMSIS-DSP)
+ * - Proper magnitude calculation
+ *
+ * Current implementation uses simple energy-based detection
+ * as a placeholder until CMSIS-DSP is integrated.
+ */
+
+#include "presence_detection.h"
+#include <string.h>
+#include <math.h>
+
+void presence_init(presence_ctx_t *ctx)
+{
+    memset(ctx, 0, sizeof(presence_ctx_t));
+    ctx->first_run = true;
+    ctx->presence_detected = false;
+}
+
+/*
+ * Simplified presence detection (placeholder)
+ *
+ * TODO: Replace with full algorithm:
+ * 1. Apply Blackman-Harris window
+ * 2. Compute FFT using CMSIS-DSP arm_rfft_fast_f32()
+ * 3. Calculate magnitude
+ * 4. Average over chirps
+ * 5. Update IIR filters (slow/fast averages)
+ * 6. Compare difference against threshold
+ *
+ * Current implementation: Simple energy-based detection
+ */
+bool presence_detect(presence_ctx_t *ctx, const radar_frame_t *frame)
+{
+    if (!frame || !frame->valid) {
+        return false;
+    }
+
+    /* Calculate simple energy per sample (sum of squares across chirps) */
+    float energy[RADAR_NUM_SAMPLES];
+
+    for (int s = 0; s < RADAR_NUM_SAMPLES; s++) {
+        float sum = 0.0f;
+
+        /* Sum energy across all chirps for this sample */
+        for (int c = 0; c < RADAR_NUM_CHIRPS; c++) {
+            int16_t sample = frame->samples[c * RADAR_NUM_SAMPLES + s];
+            float val = (float)sample / 32768.0f;  /* Normalize */
+            sum += val * val;
+        }
+
+        energy[s] = sum / RADAR_NUM_CHIRPS;  /* Average */
+    }
+
+    /* Initialize averages on first run */
+    if (ctx->first_run) {
+        for (int i = 0; i < RADAR_NUM_SAMPLES; i++) {
+            ctx->slow_avg[i] = energy[i];
+            ctx->fast_avg[i] = energy[i];
+        }
+        ctx->first_run = false;
+        return false;  /* No detection on first frame */
+    }
+
+    /* Update exponential moving averages */
+    float alpha_slow_used = ctx->presence_detected ? ALPHA_SLOW : ALPHA_MED;
+
+    for (int i = 0; i < RADAR_NUM_SAMPLES; i++) {
+        ctx->slow_avg[i] = ctx->slow_avg[i] * (1.0f - alpha_slow_used) +
+                          energy[i] * alpha_slow_used;
+
+        ctx->fast_avg[i] = ctx->fast_avg[i] * (1.0f - ALPHA_FAST) +
+                          energy[i] * ALPHA_FAST;
+    }
+
+    /* Find maximum difference in detection range */
+    float max_diff = 0.0f;
+
+    for (int i = DETECT_START_SAMPLE; i < DETECT_END_SAMPLE; i++) {
+        float diff = ctx->fast_avg[i] - ctx->slow_avg[i];
+        if (diff > max_diff) {
+            max_diff = diff;
+        }
+    }
+
+    /* Threshold comparison */
+    ctx->presence_detected = (max_diff > THRESHOLD_PRESENCE);
+
+    return ctx->presence_detected;
+}
+
+/*
+ * TODO: Implement full algorithm with FFT
+ *
+ * Steps to complete:
+ * 1. Download CMSIS-DSP: https://github.com/ARM-software/CMSIS-DSP
+ * 2. Add to lib/ directory
+ * 3. Update Makefile to include CMSIS-DSP sources
+ * 4. Pre-compute Blackman-Harris window coefficients
+ * 5. Implement FFT-based processing:
+ *
+ * bool presence_detect_fft(presence_ctx_t *ctx, const radar_frame_t *frame)
+ * {
+ *     float windowed[RADAR_NUM_SAMPLES];
+ *     float fft_out[RADAR_NUM_SAMPLES * 2];
+ *     float magnitude[RADAR_NUM_SAMPLES];
+ *
+ *     // Average across chirps and apply window
+ *     for (int s = 0; s < RADAR_NUM_SAMPLES; s++) {
+ *         float sum = 0.0f;
+ *         for (int c = 0; c < RADAR_NUM_CHIRPS; c++) {
+ *             sum += frame->samples[c * RADAR_NUM_SAMPLES + s];
+ *         }
+ *         windowed[s] = (sum / RADAR_NUM_CHIRPS) * blackman_harris[s];
+ *     }
+ *
+ *     // Compute FFT
+ *     arm_rfft_fast_instance_f32 fft_inst;
+ *     arm_rfft_fast_init_f32(&fft_inst, RADAR_NUM_SAMPLES);
+ *     arm_rfft_fast_f32(&fft_inst, windowed, fft_out, 0);
+ *
+ *     // Calculate magnitude
+ *     arm_cmplx_mag_f32(fft_out, magnitude, RADAR_NUM_SAMPLES);
+ *
+ *     // Continue with IIR filters and threshold comparison...
+ * }
+ */

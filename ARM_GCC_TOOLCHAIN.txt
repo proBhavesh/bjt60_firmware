@@ -1,0 +1,46 @@
+How to Build the Firmware (.bin file)
+======================================
+
+The .bin file isn't in the repository because it's a compiled output.
+You need to build it yourself using the ARM GCC toolchain.
+
+Step 1: Install ARM GCC Toolchain
+---------------------------------
+It's open source and free to download.
+
+Windows:
+  Download from: https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads
+  Get the .exe installer for Windows (arm-gnu-toolchain-...-mingw-w64-i686-arm-none-eabi.exe)
+
+Linux:
+  sudo apt install gcc-arm-none-eabi
+
+Mac:
+  brew install arm-none-eabi-gcc
+
+Step 2: Verify Installation
+---------------------------
+Open terminal/command prompt and run:
+  arm-none-eabi-gcc --version
+
+You should see version info if installed correctly.
+
+Step 3: Build the Firmware
+--------------------------
+Navigate to the project folder and run:
+  cd bjt60_firmware
+  make clean
+  make
+
+Step 4: Find the .bin File
+--------------------------
+After successful build, the .bin file will be in:
+  build/bjt60_presence.bin
+
+This is the file you flash to the board.
+
+Troubleshooting
+---------------
+- If "make" command not found: Install make (comes with MinGW on Windows)
+- If arm-none-eabi-gcc not found: Add it to your PATH environment variable
+- If build fails: Make sure you have the full repository including lib/ folder
